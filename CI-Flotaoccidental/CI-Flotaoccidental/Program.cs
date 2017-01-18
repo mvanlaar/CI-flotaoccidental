@@ -62,14 +62,12 @@ namespace CI_Flotaoccidental
                 {
                     stream.Write(data, 0, data.Length);
                 }
-
                 var response = (HttpWebResponse)request.GetResponse();
-
                 var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
-
+                // Response JSON: [{"coddes":"401","descripcion":"Medell\u00edn"},{"coddes":"503","descripcion":"Condoto"},{"coddes":"506","descripcion":"Istmina"},{"coddes":"501","descripcion":"Quibdo"},{"coddes":"508","descripcion":"Tado"}]
 
             }
-            
+
         }
 
         [Serializable]
