@@ -1,4 +1,6 @@
 ﻿using HtmlAgilityPack;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -46,11 +48,11 @@ namespace CI_Flotaoccidental
             }
 
             Console.WriteLine("Parsing through the from to get the destionations for each from locations...");
-            foreach (var origen in _Origens) 
+            foreach (var Origen in _Origens) 
             {
                 var request = (HttpWebRequest)WebRequest.Create("http://www.flotaoccidental.com/formprueba/destinos.php");
 
-                var postData = "destino=101";
+                var postData = String.Format("destino={0}", Origen.Ciudad_ID);
                 var data = Encoding.ASCII.GetBytes(postData);
 
                 request.Method = "POST";
@@ -64,10 +66,54 @@ namespace CI_Flotaoccidental
                 }
                 var response = (HttpWebResponse)request.GetResponse();
                 var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
+                
+                // Parse the Response.
+                dynamic DestinationResponseJson = JArray.Parse(responseString);
+                foreach (var destino in DestinationResponseJson)
+                {
+                    string Destino_CIUDAD_ID = destino.coddes;
+                    string Destino_CIUDAD_NOMBRE = destino.descripcion;
+                    if (Destino_CIUDAD_ID != "0")
+                    {
+                        _OrigensDestino.Add(new CIBusOrigensDestino { Origen_Ciudad_ID = Origen.Ciudad_ID, Origen_Ciudad_Nombre = Origen.Ciudad_Nombre, Destino_Ciudad_ID = Destino_CIUDAD_ID, Destino_Ciudad_Nombre = Destino_CIUDAD_NOMBRE });
+                    }
+                }
                 // Response JSON: [{"coddes":"401","descripcion":"Medell\u00edn"},{"coddes":"503","descripcion":"Condoto"},{"coddes":"506","descripcion":"Istmina"},{"coddes":"501","descripcion":"Quibdo"},{"coddes":"508","descripcion":"Tado"}]
-
             }
+            // Begin parsing route information
+            foreach (var FromToCombo in _OrigensDestino)
+            {
+                var request = (HttpWebRequest)WebRequest.Create("http://www.flotaoccidental.com/carrito/cargarViajes");
+                //fecha=2017%2F01%2F27&origen=101&destino=401&title=Viajes+de+Ida&seleccion=Ida&lang=spanish
+                var postData = String.Format("fecha=2017%2F01%2F27");
+                postData += String.Format("&origen={0}", FromToCombo.Origen_Ciudad_ID);
+                postData += String.Format("&destino={0}", FromToCombo.Destino_Ciudad_ID);
+                postData += String.Format("&title=Viajes+de+Ida&seleccion=Ida&lang=spanish");                
+                var data = Encoding.ASCII.GetBytes(postData);
 
+                request.Method = "POST";
+                request.ContentType = "application/x-www-form-urlencoded";
+                request.ContentLength = data.Length;
+                request.UserAgent = "Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko";
+
+                using (var stream = request.GetRequestStream())
+                {
+                    stream.Write(data, 0, data.Length);
+                }
+                var response = (HttpWebResponse)request.GetResponse();
+                var responseString = new StreamReader(response.GetResponseStream()).ReadToEnd();
+                // Reponse is html.
+                HtmlDocument RouteTimesHtml = new HtmlDocument();
+                RouteTimesHtml.LoadHtml(responseString);
+                var RouteTimes = doc.DocumentNode.SelectNodes("//table//tbody//tr");
+                foreach (var RouteTime in RouteTimes)
+                {
+                    // Select Input
+                    HtmlNode InputNode = RouteTime.SelectSingleNode("./input");
+                    string DepartTime = InputNode.Attributes["data-fechatiq"].Value;
+
+                }
+            }
         }
 
         [Serializable]
