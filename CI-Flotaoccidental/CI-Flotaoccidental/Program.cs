@@ -15,6 +15,8 @@ namespace CI_Flotaoccidental
     {
         static void Main(string[] args)
         {
+
+            // http://flotaoccidental.co/horarios is better source, but contains no route information.
             List<CIBusOrigens> _Origens = new List<CIBusOrigens> { };
             List<CIBusOrigensDestino> _OrigensDestino = new List<CIBusOrigensDestino> { };
             List<CIBusTramoSteps> _TramoSteps = new List<CIBusTramoSteps> { };
