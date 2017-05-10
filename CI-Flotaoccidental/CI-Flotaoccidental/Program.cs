@@ -31,36 +31,32 @@ namespace CI_Flotaoccidental
                 wc.Headers.Add("Referer", "http://www.flotaoccidental.com/");
                 wc.Proxy = null;
                 Console.WriteLine("Download Origens list");
-                OrigensHtml = wc.DownloadString("http://www.flotaoccidental.com/formprueba/menu.php");
+                OrigensHtml = wc.DownloadString("http://flotaoccidental.co/horarios");
                 Console.WriteLine("Download ready...");
             }
             HtmlDocument doc = new HtmlDocument();
             doc.LoadHtml(OrigensHtml);
-            var nodes = doc.DocumentNode.SelectNodes("//select[@id='origenCompra']/option");
-            foreach (var node in nodes)
+            var origens = doc.DocumentNode.SelectNodes("//select[@id='origen']/option");
+            foreach (var origen in origens)
             {
-                string AirportName = node.NextSibling.InnerText;
-                string AirportValue = node.Attributes["value"].Value;                
-                AirportName = AirportName.Trim();
-                AirportValue = AirportValue.Trim();
-                if (AirportValue != "0")
-                {
-                    _Origens.Add(new CIBusOrigens { Ciudad_ID = AirportValue, Ciudad_Nombre = AirportName });
-                }
+                string OrigenName = origen.NextSibling.InnerText;
+                OrigenName = OrigenName.Trim();
+                _Origens.Add(new CIBusOrigens { Ciudad_Nombre = OrigenName });               
             }
-
             Console.WriteLine("Parsing through the from to get the destionations for each from locations...");
             foreach (var Origen in _Origens) 
             {
-                var request = (HttpWebRequest)WebRequest.Create("http://www.flotaoccidental.com/formprueba/destinos.php");
+                var request = (HttpWebRequest)WebRequest.Create("http://flotaoccidental.co/horarios/destinos");
 
-                var postData = String.Format("destino={0}", Origen.Ciudad_ID);
+                var postData = String.Format("origen={0}", Origen.Ciudad_Nombre);
                 var data = Encoding.ASCII.GetBytes(postData);
 
                 request.Method = "POST";
                 request.ContentType = "application/x-www-form-urlencoded";
                 request.ContentLength = data.Length;
                 request.UserAgent = "Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko";
+                request.Referer = "http://flotaoccidental.co/horarios";
+                request.Headers.Add("X-Requested-With", "XMLHttpRequest");
 
                 using (var stream = request.GetRequestStream())
                 {
@@ -72,31 +68,29 @@ namespace CI_Flotaoccidental
                 // Parse the Response.
                 dynamic DestinationResponseJson = JArray.Parse(responseString);
                 foreach (var destino in DestinationResponseJson)
-                {
-                    string Destino_CIUDAD_ID = destino.coddes;
-                    string Destino_CIUDAD_NOMBRE = destino.descripcion;
-                    if (Destino_CIUDAD_ID != "0")
-                    {
-                        _OrigensDestino.Add(new CIBusOrigensDestino { Origen_Ciudad_ID = Origen.Ciudad_ID, Origen_Ciudad_Nombre = Origen.Ciudad_Nombre, Destino_Ciudad_ID = Destino_CIUDAD_ID, Destino_Ciudad_Nombre = Destino_CIUDAD_NOMBRE });
-                    }
+                {                   
+                    string Destino_CIUDAD_NOMBRE = destino.destino;
+                    _OrigensDestino.Add(new CIBusOrigensDestino { Origen_Ciudad_Nombre = Origen.Ciudad_Nombre, Destino_Ciudad_Nombre = Destino_CIUDAD_NOMBRE });                    
                 }
                 // Response JSON: [{"coddes":"401","descripcion":"Medell\u00edn"},{"coddes":"503","descripcion":"Condoto"},{"coddes":"506","descripcion":"Istmina"},{"coddes":"501","descripcion":"Quibdo"},{"coddes":"508","descripcion":"Tado"}]
             }
             // Begin parsing route information
             foreach (var FromToCombo in _OrigensDestino)
             {
-                var request = (HttpWebRequest)WebRequest.Create("http://www.flotaoccidental.com/carrito/cargarViajes");
+                var request = (HttpWebRequest)WebRequest.Create("http://flotaoccidental.co/horarios/consultaHorarios");
                 //fecha=2017%2F01%2F27&origen=101&destino=401&title=Viajes+de+Ida&seleccion=Ida&lang=spanish
-                var postData = String.Format("fecha=2017%2F01%2F27");
-                postData += String.Format("&origen={0}", FromToCombo.Origen_Ciudad_ID);
-                postData += String.Format("&destino={0}", FromToCombo.Destino_Ciudad_ID);
-                postData += String.Format("&title=Viajes+de+Ida&seleccion=Ida&lang=spanish");                
+                var postData = String.Format("fecha=2017-05-10");
+                postData += String.Format("&origen={0}", FromToCombo.Origen_Ciudad_Nombre);
+                postData += String.Format("&destino={0}", FromToCombo.Destino_Ciudad_Nombre);
+                //postData += String.Format("&title=Viajes+de+Ida&seleccion=Ida&lang=spanish");                
                 var data = Encoding.ASCII.GetBytes(postData);
 
                 request.Method = "POST";
-                request.ContentType = "application/x-www-form-urlencoded";
+                request.ContentType = "application/x-www-form-urlencoded; charset=UTF-8";
                 request.ContentLength = data.Length;
                 request.UserAgent = "Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko";
+                request.Referer = "http://flotaoccidental.co/horarios";
+                request.Headers.Add("X-Requested-With", "XMLHttpRequest");
 
                 using (var stream = request.GetRequestStream())
                 {
@@ -110,10 +104,18 @@ namespace CI_Flotaoccidental
                 var RouteTimes = doc.DocumentNode.SelectNodes("//table//tbody//tr");
                 foreach (var RouteTime in RouteTimes)
                 {
-                    // Select Input
+                    /* 
+                     * <tr>
+                     * <td>CORRIENTE</td>
+                     * <td>2017-05-10</td> datum
+                     * <td>9:00 am</td> vertrektijd
+                     * <td>00:40:00</td> duur rit.
+                     * <td>28</td> 
+                     * 	</tr>
+                     */
                     HtmlNode InputNode = RouteTime.SelectSingleNode("./input");
-                    string DepartTime = InputNode.Attributes["data-fechatiq"].Value;
-
+                    string DepartTime = RouteTime.SelectSingleNode("./td[1]").InnerText.ToString();
+                    string RitTime = RouteTime.SelectSingleNode("./td[2]").InnerText.ToString();
                 }
             }
         }
@@ -129,11 +131,8 @@ namespace CI_Flotaoccidental
         [Serializable]
         public class CIBusOrigensDestino
         {
-            // Auto-implemented properties. 
-
-            public string Origen_Ciudad_ID;
+            // Auto-implemented properties.                         
             public string Origen_Ciudad_Nombre;
-            public string Destino_Ciudad_ID;
             public string Destino_Ciudad_Nombre;
         }
 
