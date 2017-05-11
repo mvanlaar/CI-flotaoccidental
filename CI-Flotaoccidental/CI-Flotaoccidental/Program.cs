@@ -4,6 +4,7 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Text;
@@ -11,17 +12,20 @@ using System.Threading.Tasks;
 
 namespace CI_Flotaoccidental
 {
-    class Program
+    public class Program
     {
         static void Main(string[] args)
         {
 
             // http://flotaoccidental.co/horarios is better source, but contains no route information.
             List<CIBusOrigens> _Origens = new List<CIBusOrigens> { };
-            List<CIBusOrigensDestino> _OrigensDestino = new List<CIBusOrigensDestino> { };
-            List<CIBusTramoSteps> _TramoSteps = new List<CIBusTramoSteps> { };
+            List<CIBusOrigensDestino> _OrigensDestino = new List<CIBusOrigensDestino> { };            
             List<CIBusRoutes> _Routes = new List<CIBusRoutes> { };
-            List<CIBusRoutesDetails> _RoutesDetails = new List<CIBusRoutesDetails> { };
+            DateTime Date = DateTime.Now;
+
+            CookieContainer cookieContainer = new CookieContainer();
+            CookieCollection cookieCollection = new CookieCollection();
+
 
             String OrigensHtml = String.Empty;
             using (System.Net.WebClient wc = new WebClient())
@@ -57,6 +61,7 @@ namespace CI_Flotaoccidental
                 request.UserAgent = "Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko";
                 request.Referer = "http://flotaoccidental.co/horarios";
                 request.Headers.Add("X-Requested-With", "XMLHttpRequest");
+                request.CookieContainer = cookieContainer;
 
                 using (var stream = request.GetRequestStream())
                 {
@@ -82,7 +87,7 @@ namespace CI_Flotaoccidental
                 //fecha=2017%2F01%2F27&origen=101&destino=401&title=Viajes+de+Ida&seleccion=Ida&lang=spanish
                 var postData = String.Format("origen={0}", FromToCombo.Origen_Ciudad_Nombre);
                 postData += String.Format("&destino={0}", FromToCombo.Destino_Ciudad_Nombre);
-                postData += String.Format("&fecha=2017-05-11");
+                postData += String.Format("&fecha={0}", Date.ToString("yyyy-MM-dd"));
                 //postData += String.Format("&title=Viajes+de+Ida&seleccion=Ida&lang=spanish");                
                 var data = Encoding.ASCII.GetBytes(postData);
 
@@ -92,7 +97,10 @@ namespace CI_Flotaoccidental
                 request.UserAgent = "Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko";
                 request.Referer = "http://flotaoccidental.co/horarios";
                 request.Headers.Add("X-Requested-With", "XMLHttpRequest");
-
+                request.Accept = "gzip,deflate";
+                request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+                request.CookieContainer = cookieContainer;
+                
                 using (var stream = request.GetRequestStream())
                 {
                     stream.Write(data, 0, data.Length);
@@ -103,30 +111,47 @@ namespace CI_Flotaoccidental
                 HtmlDocument RouteTimesHtml = new HtmlDocument();
                 RouteTimesHtml.LoadHtml(responseString);
                 var RouteTimes = RouteTimesHtml.DocumentNode.SelectNodes("//table//tbody//tr");
-                foreach (var RouteTime in RouteTimes)
+                if (RouteTimes != null)
                 {
-                    /* 
-                     * <tr>
-                     * <td>CORRIENTE</td>
-                     * <td>2017-05-10</td> datum
-                     * <td>9:00 am</td> vertrektijd
-                     * <td>00:40:00</td> duur rit.
-                     * <td>28</td> 
-                     * 	</tr>
-                     */
-                    HtmlNode InputNode = RouteTime.SelectSingleNode("./input");
-                    string DepartTime = RouteTime.SelectSingleNode("/table[1]/tbody[1]/tr[1]/td[3]").InnerText.ToString();
-                    string RitTime = RouteTime.SelectSingleNode("/table[1]/tbody[1]/tr[1]/td[4]").InnerText.ToString();
+                    foreach (var RouteTime in RouteTimes)
+                    {
+                        /* 
+                         * <tr>
+                         * <td>CORRIENTE</td>
+                         * <td>2017-05-10</td> datum
+                         * <td>9:00 am</td> vertrektijd
+                         * <td>00:40:00</td> duur rit.
+                         * <td>28</td> 
+                         * 	</tr>
+                         */                        
+                        string DepartTime = RouteTime.SelectSingleNode("./td[3]").InnerText.ToString();
+                        DateTime DepartTimeDT = DateTime.Parse(DepartTime);
+                        string Duration = RouteTime.SelectSingleNode("./td[4]").InnerText.ToString();
+                        TimeSpan DurationTS = TimeSpan.Parse(Duration);
+                        DateTime ArrivalTimeDT = DepartTimeDT.Add(DurationTS);
+                        string TypeVehicle = RouteTime.SelectSingleNode("./td[1]").InnerText.ToString();
+                        _Routes.Add(new CIBusRoutes { From = FromToCombo.Origen_Ciudad_Nombre, To = FromToCombo.Destino_Ciudad_Nombre, DepartTime = DepartTimeDT, ArrivalTime = ArrivalTimeDT, TypeVehicle = TypeVehicle });
+                    }
                 }
             }
+
+            // Export XML
+            // Write the list of objects to a file.
+            System.Xml.Serialization.XmlSerializer writer =
+            new System.Xml.Serialization.XmlSerializer(_Routes.GetType());
+            string myDir = AppDomain.CurrentDomain.BaseDirectory + "\\output";
+            Directory.CreateDirectory(myDir);
+            StreamWriter file =
+               new System.IO.StreamWriter("output\\output.xml");
+
+            writer.Serialize(file, _Routes);
+            file.Close();
         }
 
         [Serializable]
         public class CIBusOrigens
         {
-            // Auto-implemented properties. 
-
-            public string Ciudad_ID;
+            // Auto-implemented properties.             
             public string Ciudad_Nombre;
         }
         [Serializable]
@@ -137,16 +162,6 @@ namespace CI_Flotaoccidental
             public string Destino_Ciudad_Nombre;
         }
 
-        [Serializable]
-        public class CIBusTramo
-        {
-            // Auto-implemented properties. 
-
-            public string Origen_Ciudad_ID;
-            public string Origen_Ciudad_Nombre;
-            public string Destino_Ciudad_ID;
-            public string Destino_Ciudad_Nombre;
-        }
         [Serializable]
         public class CIBusTramoSteps
         {
@@ -160,28 +175,12 @@ namespace CI_Flotaoccidental
         public class CIBusRoutes
         {
             // Auto-implemented properties. 
-
-            public string RutaNr;
             public string From;
             public string To;
+            public DateTime DepartTime;
+            public DateTime ArrivalTime;
+            public string TypeVehicle;
 
         }
-        [Serializable]
-        public class CIBusRoutesDetails
-        {
-            // Auto-implemented properties. 
-
-            public string EMPRESA;
-            public string EMPRESAN;
-            public string AGENCIA;
-            public string AGENCIAN;
-            public string CIUDADN;
-            public string DEPARTAMENTON;
-            public string PAISN;
-            public string RUTA;
-            public string KILOMETROS;
-            public string MINUTOS;
-        }
-
     }
 }
