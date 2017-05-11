@@ -28,7 +28,7 @@ namespace CI_Flotaoccidental
             {
                 
                 wc.Headers.Add("user-agent", "Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko");
-                wc.Headers.Add("Referer", "http://www.flotaoccidental.com/");
+                wc.Headers.Add("Referer", "http://flotaoccidental.co/transporte-de-pasajeros/");
                 wc.Proxy = null;
                 Console.WriteLine("Download Origens list");
                 OrigensHtml = wc.DownloadString("http://flotaoccidental.co/horarios");
@@ -75,13 +75,14 @@ namespace CI_Flotaoccidental
                 // Response JSON: [{"coddes":"401","descripcion":"Medell\u00edn"},{"coddes":"503","descripcion":"Condoto"},{"coddes":"506","descripcion":"Istmina"},{"coddes":"501","descripcion":"Quibdo"},{"coddes":"508","descripcion":"Tado"}]
             }
             // Begin parsing route information
+            Console.WriteLine("Found: {0} combinations", _OrigensDestino.Count.ToString());
             foreach (var FromToCombo in _OrigensDestino)
             {
                 var request = (HttpWebRequest)WebRequest.Create("http://flotaoccidental.co/horarios/consultaHorarios");
                 //fecha=2017%2F01%2F27&origen=101&destino=401&title=Viajes+de+Ida&seleccion=Ida&lang=spanish
-                var postData = String.Format("fecha=2017-05-10");
-                postData += String.Format("&origen={0}", FromToCombo.Origen_Ciudad_Nombre);
+                var postData = String.Format("origen={0}", FromToCombo.Origen_Ciudad_Nombre);
                 postData += String.Format("&destino={0}", FromToCombo.Destino_Ciudad_Nombre);
+                postData += String.Format("&fecha=2017-05-11");
                 //postData += String.Format("&title=Viajes+de+Ida&seleccion=Ida&lang=spanish");                
                 var data = Encoding.ASCII.GetBytes(postData);
 
@@ -101,7 +102,7 @@ namespace CI_Flotaoccidental
                 // Reponse is html.
                 HtmlDocument RouteTimesHtml = new HtmlDocument();
                 RouteTimesHtml.LoadHtml(responseString);
-                var RouteTimes = doc.DocumentNode.SelectNodes("//table//tbody//tr");
+                var RouteTimes = RouteTimesHtml.DocumentNode.SelectNodes("//table//tbody//tr");
                 foreach (var RouteTime in RouteTimes)
                 {
                     /* 
@@ -114,8 +115,8 @@ namespace CI_Flotaoccidental
                      * 	</tr>
                      */
                     HtmlNode InputNode = RouteTime.SelectSingleNode("./input");
-                    string DepartTime = RouteTime.SelectSingleNode("./td[1]").InnerText.ToString();
-                    string RitTime = RouteTime.SelectSingleNode("./td[2]").InnerText.ToString();
+                    string DepartTime = RouteTime.SelectSingleNode("/table[1]/tbody[1]/tr[1]/td[3]").InnerText.ToString();
+                    string RitTime = RouteTime.SelectSingleNode("/table[1]/tbody[1]/tr[1]/td[4]").InnerText.ToString();
                 }
             }
         }
