@@ -10,6 +10,7 @@ using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using CsvHelper;
+using System.Configuration;
 
 namespace CI_Flotaoccidental
 {
@@ -23,6 +24,9 @@ namespace CI_Flotaoccidental
             List<CIBusOrigensDestino> _OrigensDestino = new List<CIBusOrigensDestino> { };            
             List<CIBusRoutes> _Routes = new List<CIBusRoutes> { };
             DateTime Date = DateTime.Now;
+
+            string APIPathBusAgency = "bus/agency/";
+            string APIPathBusAgencyStop = "bus/agencystop/{0}/{1}";
 
             CookieContainer cookieContainer = new CookieContainer();
             CookieCollection cookieCollection = new CookieCollection();
@@ -208,16 +212,29 @@ namespace CI_Flotaoccidental
                 csv.WriteField("agency_fare_url");
                 csv.WriteField("agency_email");
                 csv.NextRecord();
+                
+                    string urlapi = ConfigurationManager.AppSettings.Get("APIUrl") + APIPathBusAgency + "FO";
+                    string RequestAirlineJson = String.Empty;
+                    HttpWebRequest requestAirline = (HttpWebRequest)WebRequest.Create(urlapi);
 
-                csv.WriteField("FO");
-                csv.WriteField("Flota Occidental");
-                csv.WriteField("http://flotaoccidental.co/");
-                csv.WriteField("America/Bogota");
-                csv.WriteField("ES");
-                csv.WriteField("+57 (6) 321-1655");
-                csv.WriteField("");
-                csv.WriteField("servicioalcliente@flotaoccidental.com");
-                csv.NextRecord();
+                    requestAirline.Method = "GET";                    
+                    requestAirline.Proxy = null;
+                    requestAirline.KeepAlive = false;
+                    using (HttpWebResponse Airlineresponse = (HttpWebResponse)requestAirline.GetResponse())
+                    using (StreamReader reader = new StreamReader(Airlineresponse.GetResponseStream()))
+                    {
+                        RequestAirlineJson = reader.ReadToEnd();
+                    }
+                    dynamic AirlineResponseJson = JsonConvert.DeserializeObject(RequestAirlineJson);
+                    csv.WriteField(Convert.ToString(AirlineResponseJson[0].agency_id));
+                    csv.WriteField(Convert.ToString(AirlineResponseJson[0].agency_name));
+                    csv.WriteField(Convert.ToString(AirlineResponseJson[0].agency_url));
+                    csv.WriteField(Convert.ToString(AirlineResponseJson[0].agency_timezone));
+                    csv.WriteField(Convert.ToString(AirlineResponseJson[0].agency_lang));
+                    csv.WriteField(Convert.ToString(AirlineResponseJson[0].agency_phone));
+                    csv.WriteField(Convert.ToString(AirlineResponseJson[0].agency_fare_url));
+                    csv.WriteField("");
+                    csv.NextRecord();                
             }
 
             Console.WriteLine("Creating GTFS File routes.txt ...");
@@ -252,7 +269,7 @@ namespace CI_Flotaoccidental
                     //using (var client = new WebClient())
                     //{
                     //    client.Encoding = Encoding.UTF8;
-                    //    string urlapi = ConfigurationManager.AppSettings.Get("APIUrl") + APIPathAirport + routes[i].FromIATA;
+                    //    string urlapi = ConfigurationManager.AppSettings.Get("APIUrl") + string.Format(APIPathBusAgencyStop);
                     //    var jsonapi = client.DownloadString(urlapi);
                     //    dynamic AirportResponseJson = JsonConvert.DeserializeObject(jsonapi);
                     //    FromAirportName = Convert.ToString(AirportResponseJson[0].name);
